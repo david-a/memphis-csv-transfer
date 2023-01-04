@@ -15,7 +15,7 @@ async def main():
         await memphis.connect(**connection_dict)
         
         action = read_action_from_args()
-        station = await memphis.station(name=station_name, idempotency_window_ms=60000)
+        station = await memphis.station(name=station_name, idempotency_window_ms=5) # no need for a long idempotency_window_ms as each producer task has its own unique id
         if action == "destroy":
             await station.destroy()
         
