@@ -44,6 +44,7 @@ Run -
    b.3. On the first time I handle a new file to the consumer, caching the titles per file (enjoying both worlds)
 7. I've implemented a **Bloom filter** and used it on the producer. Under the assumptions listed above, it is not needed so much, as we have idempotency_window_ms and filename + row number based dedup mechanism (dedup by SAME line AND SAME content), but I've implemented it for demonstrations purposes. It should be enabled with setting `use_bloom_filter=True` in `utils/config.py` **ONLY if a you need a statistic filtering of rows** by hashing their content.
 8. Creds are hard-coded for simplicity and minimum dependencies but of course these would be handled as env vars in a prod scenario, maybe using dotenv file for development/build envs.
+9. This file transfer mechanism can easily be converted to be type agnostic (and a bit faster I guess) if using simple file read/write instead of csv lib's ones. The rest of the considerations are already taken into account.
 
 ## Issues
 
