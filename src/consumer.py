@@ -4,10 +4,9 @@ import csv
 from os import rename, listdir
 from os.path import exists
 from memphis import Memphis, MemphisError, MemphisConnectError, MemphisHeaderError
-from src.utils.config import connection_dict, station_name,consumer_group_name, consumer_batch_size
+from src.utils.config import connection_dict, station_name,consumer_group_name, consumer_batch_size, debug
 from src.utils.string_utils import generate_hash
 
-debug = True
 consumer_name_prefix = "read_csv_consumer_"
 output_file_prefix = "output_"
 failed_file_suffix = ".failed"
@@ -93,7 +92,7 @@ async def main():
 
                 
             except (MemphisError, MemphisConnectError, MemphisHeaderError) as e:
-                print(e)
+                print("ERROR: ", e)
                 return
             finally:
                 msg = queue.pop(0) if queue else None

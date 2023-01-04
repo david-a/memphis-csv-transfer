@@ -20,7 +20,7 @@ async def main():
             await station.destroy()
         
     except (MemphisError, MemphisConnectError) as e:
-        print(e)
+        print("ERROR: ", e)
         
     finally:
         await memphis.close()

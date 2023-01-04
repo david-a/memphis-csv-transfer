@@ -5,8 +5,9 @@ import json
 import hashlib
 from os import stat
 from memphis import Memphis, Headers, MemphisError, MemphisConnectError, MemphisHeaderError, MemphisSchemaError
+from src.utils.bloom_filter import BloomFilter
 from src.utils.string_utils import generate_hash
-from src.utils.config import connection_dict, station_name
+from src.utils.config import connection_dict, station_name, debug, bloom_max_items_count, typical_row_size_in_bytes, use_bloom_filter
 
 producer_name_prefix = "read_csv_producer_"
 
@@ -16,10 +17,16 @@ def read_csv_file_path():
         sys.exit(1)
     return sys.argv[1]
 
-async def produce_row(producer, headers, msg_id_prefix, row, line_number, last=False):
+async def produce_row(filter, producer, headers, msg_id_prefix, row, line_number, last=False):
+    if filter and not last and filter.contains(json.dumps(row)):
+        print("DEBUG: Row was already produced, Skipping line ", line_number) if debug else None
+        return False
     base = { "row": row, "line_number": line_number }
     serialized = json.dumps({ **base, "eof": True } if last else base)
     await producer.produce(bytearray(serialized, 'utf-8'), headers=headers, msg_id=msg_id_prefix + str(line_number))
+    if filter:
+        filter.add(serialized)
+    return True
 
 async def main():
     try:
@@ -31,7 +38,9 @@ async def main():
         filepath = read_csv_file_path()
         filename = filepath.split('/')[-1]
         filename_hash = hashlib.md5(filename.encode()).hexdigest()
-        print("filename_hash: ", filename_hash)
+        filesize = stat(filename).st_size
+        bloom = BloomFilter(min(bloom_max_items_count, filesize / typical_row_size_in_bytes)) if use_bloom_filter else None # using typical_row_size_in_bytes in order to avoid iterating over the whole file
+        print("DEBUG: filename_hash: ", filename_hash) if debug else None
 
         msg_id_prefix = filename_hash[:6] + "_"
         headers = Headers()
@@ -47,24 +56,25 @@ async def main():
                 try:
                     prev_row = row
                     row = next(reader)
+                    produced_row = True
                 except StopIteration:
                     if prev_row is None:
-                        print("Error: Empty file")
+                        print("ERROR: Empty file")
                         break
 
                     # By default an empty last line of a file is not considered a new line, so we need to check if the last character is a new line
-                    size = stat(filename).st_size
-                    csv_file.seek(size-1, 0)
+                    csv_file.seek(filesize-1, 0)
                     last_char = csv_file.read()
-                    await produce_row(producer, headers, msg_id_prefix, prev_row, line_number, last=last_char != '\n')
+                    produced_row = await produce_row(bloom, producer, headers, msg_id_prefix, prev_row, line_number, last=last_char != '\n')
                     if last_char == '\n':
-                        await produce_row(producer, headers, msg_id_prefix, [], line_number + 1, last=True)
+                        produced_row = await produce_row(bloom, producer, headers, msg_id_prefix, [], line_number + 1, last=True)
                     break
                 else:
                     if prev_row is not None:
-                        await produce_row(producer, headers, msg_id_prefix, prev_row, line_number)
+                        produced_row = await produce_row(bloom, producer, headers, msg_id_prefix, prev_row, line_number)
                 finally:
-                    line_number += 1
+                    if produced_row: # skip line_number increment if the row was skipped since this number is used in the consumer lock mechanism and should be continuous
+                        line_number += 1
         
         
     except (MemphisError, MemphisConnectError, MemphisHeaderError, MemphisSchemaError) as e:

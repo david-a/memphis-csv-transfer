@@ -1,2 +1,4 @@
 asyncio==3.4.3
 memphis-py==0.2.7
+pymmh3==0.0.5
+bitarray==2.6.2

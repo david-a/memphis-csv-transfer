@@ -20,16 +20,21 @@ Run -
 2. Run the docker env with `docker compose -f docker-compose.yml -p memphis up`
 3. Create a station with `python3 -m src.station create` # In order to avoid using the default settings when running a consumer/producer
 4. Run each consumer with `python3 -m src.consumer`
-   (You can set `debug=False` on `consumer.py` to avoid debug messages on screen)
+   (You can set `debug=False` on `utils/config.py` to avoid debug messages on screen)
 5. Run the producer with `python3 -m src.producer example.csv` # or some other csv filepath
 6. Destroy a station with `python3 -m src.station destroy`
+
+## External libs
+
+1. `asyncio` and `memphis-py` - Required for Memphis broker
+2. For the Bloom filter, I've added `pymmh3` to have a fast hashing algorithm with manual seed input (as opposed to using built in `hash()` which does not support manual seed) so I can have multiple hashes per each entry, and `bitarray` to efficiently use bit sized array with low memory footprint (as opposed to using the built in bytearray, or having to implement a bitarray myself using it).
 
 ## Notes
 
 1. The app can handle multiple files simultaniously and dynamically (i.e. no need for separate consumer group for each task/file), separates them by their filename.
 2. The write-lock mechanism and ordering mechanism is one - each row is written to the file only when it is ready for it - the filename ends with the relevant line number (e.g. output_12345.example.csv.13). This mechanism is better optimized to large files, the bigger the consumer batch size is.
 3. I chose to drop the task (all the next mesages) completely if a message (i.e. row) is missing to assure file integrity, but I could just as well replace the row with some placeholder.
-4. I set idempotency_window_ms to a small value since each run of the producer on a file will create a separate task, causing the consumers to create a separate file for it. Nontheless if we want to avoid sending the same files again we only need to set idempotency_window_ms to the desired period.
+4. I set idempotency_window_ms to a small value since each run of the producer on a file will create a separate task, causing the consumers to create a separate file for it. So using idempotency_window_ms only to avoid networking issues duplications and such. Nontheless if we want to avoid sending the same files again we only need to set idempotency_window_ms to the desired period.
 5. I assume that the consumer does not need to know the context of each row (e.g. its column names), and as such I can send the rows without this unnecessary data. Each line will be written to the right file and order, nothing more, as I need to open and close the file for each line anyhow in order to support multiple consumers and as required in the spec.
 6. If that context (column names) would be needed on a per row basis, I could do ONE of the following -
    a. In the producer, send the titles inside the json data or headers (waste of memory, network, etc)
@@ -37,7 +42,8 @@ Run -
    b.1. EACH time I get a message (enabling multiple files, but affecting performance and file io)
    b.2. On the first time I handle a file (designing the app to support only a single file at a time, better performance)
    b.3. On the first time I handle a new file to the consumer, caching the titles per file (enjoying both worlds)
-7. Creds are hard-coded for simplicity and minimum dependencies but of course these would be handled as env vars in a prod scenario, maybe using dotenv file for development/build envs.
+7. I've implemented a **Bloom filter** and used it on the producer. Under the assumptions listed above, it is not needed so much, as we have idempotency_window_ms and filename + row number based dedup mechanism (dedup by SAME line AND SAME content), but I've implemented it for demonstrations purposes. It should be enabled with setting `use_bloom_filter=True` in `utils/config.py` **ONLY if a you need a statistic filtering of rows** by hashing their content.
+8. Creds are hard-coded for simplicity and minimum dependencies but of course these would be handled as env vars in a prod scenario, maybe using dotenv file for development/build envs.
 
 ## Issues
 
