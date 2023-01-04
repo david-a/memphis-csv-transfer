@@ -3,6 +3,7 @@ import asyncio
 import csv
 import json
 import hashlib
+from os import stat
 from memphis import Memphis, Headers, MemphisError, MemphisConnectError, MemphisHeaderError, MemphisSchemaError
 from src.utils.string_utils import generate_hash
 from src.utils.config import connection_dict, station_name
@@ -50,7 +51,14 @@ async def main():
                     if prev_row is None:
                         print("Error: Empty file")
                         break
-                    await produce_row(producer, headers, msg_id_prefix, prev_row, line_number, last=True)
+
+                    # By default an empty last line of a file is not considered a new line, so we need to check if the last character is a new line
+                    size = stat(filename).st_size
+                    csv_file.seek(size-1, 0)
+                    last_char = csv_file.read()
+                    await produce_row(producer, headers, msg_id_prefix, prev_row, line_number, last=last_char != '\n')
+                    if last_char == '\n':
+                        await produce_row(producer, headers, msg_id_prefix, [], line_number + 1, last=True)
                     break
                 else:
                     if prev_row is not None:

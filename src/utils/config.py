@@ -5,3 +5,4 @@ connection_dict = {
     'username': 'ddy',
     'connection_token': 'memphis'
 }
+consumer_batch_size=10
