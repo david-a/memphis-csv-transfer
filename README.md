@@ -18,8 +18,9 @@ Run -
 
 1. If not already done, cd to the repo root and activate the env with `source .pyenv/bin/activate`
 2. Run the docker env with `docker compose -f docker-compose.yml -p memphis up`
-3. Create a station with `python3 -m src.station create`
+3. Create a station with `python3 -m src.station create` # In order to avoid using the default settings when running a consumer/producer
 4. Run each consumer with `python3 -m src.consumer`
+   (You can set `debug=False` on `consumer.py` to avoid debug messages on screen)
 5. Run the producer with `python3 -m src.producer example.csv` # or some other csv filepath
 6. Destroy a station with `python3 -m src.station destroy`
 
@@ -28,14 +29,15 @@ Run -
 1. The app can handle multiple files simultaniously and dynamically (i.e. no need for separate consumer group for each task/file), separates them by their filename.
 2. The write-lock mechanism and ordering mechanism is one - each row is written to the file only when it is ready for it - the filename ends with the relevant line number (e.g. output_12345.example.csv.13). This mechanism is better optimized to large files, the bigger the consumer batch size is.
 3. I chose to drop the task (all the next mesages) completely if a message (i.e. row) is missing to assure file integrity, but I could just as well replace the row with some placeholder.
-4. I assume that the consumer does not need to know the context of each row (e.g. its column names), and as such I can send the rows without this unnecessary data. Each line will be written to the right file and order, nothing more, as I need to open and close the file for each line anyhow in order to support multiple consumers and as required in the spec.
-5. If that context (column names) would be needed on a per row basis, I could do ONE of the following -
+4. I set idempotency_window_ms to a small value since each run of the producer on a file will create a separate task, causing the consumers to create a separate file for it. Nontheless if we want to avoid sending the same files again we only need to set idempotency_window_ms to the desired period.
+5. I assume that the consumer does not need to know the context of each row (e.g. its column names), and as such I can send the rows without this unnecessary data. Each line will be written to the right file and order, nothing more, as I need to open and close the file for each line anyhow in order to support multiple consumers and as required in the spec.
+6. If that context (column names) would be needed on a per row basis, I could do ONE of the following -
    a. In the producer, send the titles inside the json data or headers (waste of memory, network, etc)
    b. In the consumer, read the titles from the first line of file being written (or have them from the first message of the file) -
    b.1. EACH time I get a message (enabling multiple files, but affecting performance and file io)
    b.2. On the first time I handle a file (designing the app to support only a single file at a time, better performance)
    b.3. On the first time I handle a new file to the consumer, caching the titles per file (enjoying both worlds)
-6. Creds are hard-coded for simplicity and minimum dependencies but of course these would be handled as env vars in a prod scenario, maybe using dotenv file for development/build envs.
+7. Creds are hard-coded for simplicity and minimum dependencies but of course these would be handled as env vars in a prod scenario, maybe using dotenv file for development/build envs.
 
 ## Issues
 

@@ -1,7 +1,7 @@
 import sys
 import asyncio
 from memphis import Memphis, MemphisError, MemphisConnectError, MemphisHeaderError,retention_types, storage_types
-from src.utils.config import connection_dict, station_name
+from src.utils.config import connection_dict, station_name, idempotency_window_ms, retention_value
 
 def read_action_from_args():
     if len(sys.argv) < 2 or sys.argv[1] not in ["create", "destroy"]:
@@ -15,7 +15,7 @@ async def main():
         await memphis.connect(**connection_dict)
         
         action = read_action_from_args()
-        station = await memphis.station(name=station_name, idempotency_window_ms=5) # no need for a long idempotency_window_ms as each producer task has its own unique id
+        station = await memphis.station(name=station_name, idempotency_window_ms=idempotency_window_ms,retention_value=retention_value) 
         if action == "destroy":
             await station.destroy()
         
